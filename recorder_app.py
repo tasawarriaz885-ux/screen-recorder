@@ -1,4 +1,4 @@
-"""
+ """
 Screen Recorder - GUI App (Windows)
 ------------------------------------
 Features:
@@ -61,6 +61,15 @@ class RecorderApp:
         self.duration_var = tk.IntVar(value=5)
         tk.Spinbox(f0, from_=1, to=60, width=5,
                    textvariable=self.duration_var).pack(side="left")
+
+        # ---- Quality ----
+        fq = tk.Frame(root); fq.pack(pady=4)
+        tk.Label(fq, text="Quality:").pack(side="left", padx=5)
+        self.quality_var = tk.StringVar(value="Standard (mp4v)")
+        tk.OptionMenu(fq, self.quality_var,
+                      "Standard (mp4v)",
+                      "H.264 (avc1, balanced)",
+                      "High Quality (MJPG/.avi, bigger files)").pack(side="left")
 
         # ---- Shortcuts ----
         fs = tk.LabelFrame(root, text="Shortcuts")
@@ -316,10 +325,36 @@ class RecorderApp:
         self._pick_region(on_picked)
 
     # ---------- Actual capture ----------
+    def _make_writer(self, fp_no_ext, w, h):
+        """Quality dropdown ke hisaab se codec choose karta hai.
+        H.264 fail ho (missing encoder) to khud-ba-khud mp4v par fallback karta hai.
+        Returns (writer, actual_filepath)."""
+        quality = self.quality_var.get()
+
+        if quality.startswith("High Quality"):
+            fp = fp_no_ext + ".avi"
+            writer = cv2.VideoWriter(fp, cv2.VideoWriter_fourcc(*"MJPG"), FPS, (w, h))
+            return writer, fp
+
+        if quality.startswith("H.264"):
+            fp = fp_no_ext + ".mp4"
+            writer = cv2.VideoWriter(fp, cv2.VideoWriter_fourcc(*"avc1"), FPS, (w, h))
+            if writer.isOpened():
+                return writer, fp
+            # H.264 encoder available nahi -- mp4v par fallback
+            writer.release()
+            writer = cv2.VideoWriter(fp, cv2.VideoWriter_fourcc(*"mp4v"), FPS, (w, h))
+            return writer, fp
+
+        # Standard
+        fp = fp_no_ext + ".mp4"
+        writer = cv2.VideoWriter(fp, cv2.VideoWriter_fourcc(*"mp4v"), FPS, (w, h))
+        return writer, fp
+
     def record_clip(self, duration, region):
         os.makedirs(self.save_dir, exist_ok=True)
         stamp = datetime.now().strftime("clip_%Y%m%d_%H%M%S_%f")
-        fp = os.path.join(self.save_dir, stamp + ".mp4")
+        fp_no_ext = os.path.join(self.save_dir, stamp)
 
         winsound.Beep(1000, 150)   # start beep
         self._set_status("Recording...", "orange")
@@ -327,7 +362,7 @@ class RecorderApp:
         with mss.mss() as sct:
             mon = region if region else sct.monitors[1]
             w, h = mon["width"], mon["height"]
-            writer = cv2.VideoWriter(fp, cv2.VideoWriter_fourcc(*"mp4v"), FPS, (w, h))
+            writer, fp = self._make_writer(fp_no_ext, w, h)
 
             if not writer.isOpened():
                 self._set_status("Error: recording save nahi hui (codec issue)", "red")
