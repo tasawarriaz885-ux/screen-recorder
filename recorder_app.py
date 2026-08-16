@@ -1,4 +1,5 @@
- """Screen Recorder - GUI App (Windows)
+"""
+Screen Recorder - GUI App (Windows)
 ------------------------------------
 Features:
 - UI se apna record/quit shortcut set karein
